@@ -1,0 +1,54 @@
+stages:
+  - install-deps
+  - build
+  - deploy
+
+image: christopher2k/node-python:v1
+
+variables:
+  AWS_ID: 'AKIAIIRRYEZMX6KTTOHQ'
+  AWS_SECRET: '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'
+  AWS_REGION : 'us-east-1'
+
+# JOBS
+install node dependencies:
+  stage: install-deps
+  script: yarn install --production
+  artifacts:
+    name: "dependencies"
+    paths:
+     - node_modules
+
+build code:
+  stage: build
+  only:
+    - master
+    - dev
+  script:
+    - yarn && yarn build
+    - zip -r code.zip node_modules dist package.json
+  artifacts:
+    name: "code"
+    paths:
+     - code.zip
+  dependencies:
+    - install node dependencies
+
+
+deploy code:
+  stage: deploy
+  before_script:
+    - mkdir -p ~/.aws && touch ~/.aws/config
+    - printf "[default]\naws_access_key_id = %s\naws_secret_access_key = %s\n" "$AWS_ID" "$AWS_SECRET" > ~/.aws/credentials
+  only:
+    - master
+  script: 
+    - |
+        aws lambda update-function-code \
+        --function-name jaya-user \
+        --zip-file fileb://code.zip \
+        --publish \
+        --region $AWS_REGION
+
+  dependencies:
+    - build code
